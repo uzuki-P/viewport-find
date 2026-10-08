@@ -1,0 +1,9 @@
+::highlight(viewport-find-all) {
+  background-color: #ffff00;
+  color: #000;
+}
+
+::highlight(viewport-find-current) {
+  background-color: #ff9632;
+  color: #000;
+}

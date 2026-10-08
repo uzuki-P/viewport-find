@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Viewport Find test page</title>
+<style>body{font:16px/1.6 serif;max-width:720px;margin:2rem auto;padding:0 1rem}
+#scroller{height:200px;overflow:auto;border:1px solid #999}</style></head>
+<body>
+<h1>Viewport Find test page</h1>
+<p>Inline join: foo<b>bar</b> should match "foobar".</p>
+<p hidden>target hidden-by-attribute</p>
+<p style="display:none">target hidden-by-css</p>
+<div id="paras"></div>
+<div id="scroller"></div>
+<script>
+  const words = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do".split(" ");
+  let html = "";
+  for (let i = 0; i < 200; i++) {
+    let s = "";
+    for (let j = 0; j < 40; j++) s += (j % 13 === 0 ? "Target " : words[(i + j) % words.length] + " ");
+    html += `<p>${i}: ${s}</p>`;
+  }
+  document.getElementById("paras").innerHTML = html;
+  let inner = "";
+  for (let i = 0; i < 30; i++) inner += `<p>nested ${i} needle</p>`;
+  document.getElementById("scroller").innerHTML = inner;
+</script>
+</body>
+</html>

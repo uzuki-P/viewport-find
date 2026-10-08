@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Viewport Find",
+  "version": "0.1.0",
+  "description": "Find in page with an optional mode that jumps a whole viewport per Next press.",
+  "minimum_chrome_version": "105",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Viewport Find (Ctrl+Shift+F)",
+    "default_icon": {
+      "16": "assets/icons/icon-16.png",
+      "32": "assets/icons/icon-32.png"
+    }
+  },
+  "commands": {
+    "toggle-find": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+F",
+        "mac": "Command+Shift+F"
+      },
+      "description": "Open or close the find bar"
+    },
+    "show-find": {
+      "description": "Open or focus the find bar (assign Ctrl+F to replace the browser's find)"
+    }
+  },
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "32": "assets/icons/icon-32.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
+  }
+}
