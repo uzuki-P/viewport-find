@@ -92,10 +92,17 @@ const assert = (cond, msg) => {
     });
     return result.value;
   };
-  const clickBarButton = (cls) =>
+  // attributes is a flat [name, value, name, value, ...] list.
+  const hasClass = (n, cls) => {
+    const a = n.attributes || [];
+    const i = a.indexOf("class");
+    return i % 2 === 0 && a[i + 1].split(" ").includes(cls);
+  };
+  const clickBarButton = (cls, session) =>
     callOnBarNode(
-      (n) => n.localName === "button" && (n.attributes || []).join(" ").includes(cls),
+      (n) => n.localName === "button" && hasClass(n, cls),
       "function () { this.click(); return this.getAttribute('aria-pressed'); }",
+      session,
     );
   const readTrack = async () => {
     await page.evaluate(() => new Promise(requestAnimationFrame));
@@ -243,37 +250,57 @@ const assert = (cond, msg) => {
   });
   console.log(`   large page: close + reopen with full index rebuild and search: ${timing.toFixed(1)}ms`);
 
-  // 4. Turning the animation off on the options page.
-  const opts = await ctx.newPage();
-  await opts.goto(`chrome-extension://${new URL(sw.url()).host}/options.html`);
-  assert(await opts.isChecked("#animate"), "options page: animation is on by default");
-  await opts.uncheck("#animate");
-  const saved = await sw.evaluate(() => chrome.storage.local.get("animate"));
-  assert(saved.animate === false, "options page saves animation off");
-
-  // The content script reads it from storage and follows live changes.
+  // 4. Saved animate and wrap settings load into the bar's toggles.
   const quiet = await ctx.newPage();
   await quiet.setViewportSize({ width: 1000, height: 700 });
   await quiet.goto("file://" + path.join(__dirname, "page.html"));
   await quiet.evaluate(() => {
-    const listeners = [];
+    window.__saved = { animate: false, wrap: false };
     window.chrome = {
       storage: {
-        local: { get: async () => ({ animate: false }), set: async () => {} },
-        onChanged: { addListener: (fn) => listeners.push(fn) },
+        local: {
+          get: async () => ({ ...window.__saved }),
+          set: async (values) => Object.assign(window.__saved, values),
+        },
       },
     };
-    window.__setAnimate = (v) => listeners.forEach((fn) => fn({ animate: { newValue: v } }, "local"));
   });
   await quiet.addScriptTag({ path: path.join(ext, "content.js") });
   const quietCdp = await ctx.newCDPSession(quiet);
   await quiet.keyboard.type("target");
   await quiet.waitForTimeout(120);
   await quiet.keyboard.press("Control+Enter");
-  assert((await pingClasses(quietCdp)) === "", "no ping when animation is off");
-  await quiet.evaluate(() => window.__setAnimate(true));
+  assert((await pingClasses(quietCdp)) === "", "no ping when animation is saved off");
+  assert((await clickBarButton("animate", quietCdp)) === "true", "animate button turns animation on");
+  assert((await quiet.evaluate(() => window.__saved.animate)) === true, "animate button saves the setting");
   await quiet.keyboard.press("Control+Enter");
-  assert((await pingClasses(quietCdp)) === "ping big", "turning animation back on applies without reopening");
+  assert((await pingClasses(quietCdp)) === "ping big", "turning animation back on applies right away");
+
+  // Wrapping (saved off): the ends stop instead of wrapping, and the count says so.
+  const quietIndex = () =>
+    quiet.evaluate(() => {
+      const all = [...CSS.highlights.get("viewport-find-all")];
+      return all.indexOf([...CSS.highlights.get("viewport-find-current")][0]);
+    });
+  const countText = () =>
+    callOnBarNode((n) => n.localName === "span" && hasClass(n, "count"), "function () { return this.textContent; }", quietCdp);
+  for (let i = 0; i < 60; i++) await quiet.keyboard.press("Control+Enter");
+  const lastJump = await quietIndex();
+  assert((await countText()) === "End", `viewport jumps stop at the page end (index ${lastJump})`);
+  for (let i = 0; i < 60; i++) await quiet.keyboard.press("Enter");
+  assert((await quietIndex()) === 799, "Next stops at the last match");
+  await quiet.keyboard.press("Enter");
+  assert((await quietIndex()) === 799 && (await countText()) === "End", "Next at the last match stays and shows End");
+  await quiet.waitForTimeout(1000);
+  assert((await countText()) === "800/800", "the count comes back after a moment");
+  await quiet.evaluate(() => scrollTo(0, 0));
+  await quiet.keyboard.press("Enter"); // follow scroll picks the first match
+  await quiet.keyboard.press("Shift+Enter");
+  assert((await quietIndex()) === 0 && (await countText()) === "Start", "Previous at the first match stays and shows Start");
+  assert((await clickBarButton("wrap", quietCdp)) === "true", "wrap button turns wrapping on");
+  assert((await quiet.evaluate(() => window.__saved.wrap)) === true, "wrap button saves the setting");
+  await quiet.keyboard.press("Shift+Enter");
+  assert((await quietIndex()) === 799, "wrapping back on goes from first to last");
 
   await ctx.close();
   console.log("all passed");

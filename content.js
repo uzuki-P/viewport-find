@@ -31,7 +31,8 @@
     caseSensitive: false,
     skipViewport: false,
     followScroll: true,
-    animate: true, // set on the options page
+    wrap: true,
+    animate: true,
     index: null, // { nodes, starts, text }
     matches: [], // StaticRange[]
     capped: false,
@@ -79,6 +80,7 @@
     }
     .bar.none input { color: #c5221f; }
     .count { min-width: 48px; text-align: right; color: #5f6368; padding-right: 6px; font-variant-numeric: tabular-nums; }
+    .count.edge { color: #c5221f; font-weight: 600; }
     .sep { width: 1px; height: 20px; background: #dadce0; margin: 0 4px; }
     button {
       all: unset; box-sizing: border-box; width: 28px; height: 28px; border-radius: 50%;
@@ -93,6 +95,7 @@
       .bar { background: #35363a; color: #e8eaed; box-shadow: 0 2px 6px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.08); }
       .bar.none input { color: #f28b82; }
       .count { color: #9aa0a6; }
+      .count.edge { color: #f28b82; }
       .sep { background: #5f6368; }
       button { color: #c4c7c5; }
       button:hover { background: rgba(255,255,255,.1); }
@@ -113,6 +116,12 @@
       <button class="follow" aria-pressed="true" title="Follow scroll: after you scroll away, Next and Previous start from the screen">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
       </button>
+      <button class="wrap" aria-pressed="true" title="Wrap around: Next continues from the top after the last match">
+        <svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3"/></svg>
+      </button>
+      <button class="animate" aria-pressed="true" title="Animate: a ring closes in on the match after each move">
+        <svg viewBox="0 0 24 24"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6zM18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z"/></svg>
+      </button>
       <span class="sep"></span>
       <button class="prev"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
       <button class="next"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
@@ -127,6 +136,8 @@
   const caseBtn = $(".case");
   const skipBtn = $(".skip");
   const followBtn = $(".follow");
+  const wrapBtn = $(".wrap");
+  const animateBtn = $(".animate");
   const prevBtn = $(".prev");
   const nextBtn = $(".next");
 
@@ -174,11 +185,18 @@
   });
   skipBtn.addEventListener("click", () => setSetting("skipViewport", !state.skipViewport));
   followBtn.addEventListener("click", () => setSetting("followScroll", !state.followScroll));
+  wrapBtn.addEventListener("click", () => setSetting("wrap", !state.wrap));
+  animateBtn.addEventListener("click", () => {
+    setSetting("animate", !state.animate);
+    if (!state.animate) pings.replaceChildren();
+  });
 
   function renderSettings() {
     caseBtn.setAttribute("aria-pressed", String(state.caseSensitive));
     skipBtn.setAttribute("aria-pressed", String(state.skipViewport));
     followBtn.setAttribute("aria-pressed", String(state.followScroll));
+    wrapBtn.setAttribute("aria-pressed", String(state.wrap));
+    animateBtn.setAttribute("aria-pressed", String(state.animate));
     const unit = state.skipViewport ? "viewport" : "match";
     prevBtn.title = `Previous ${unit} (Shift+Enter)`;
     nextBtn.title = `Next ${unit} (Enter)`;
@@ -190,7 +208,10 @@
     chrome.storage?.local.set({ [key]: value });
   }
 
+  let edgeTimer = 0;
   function renderCount() {
+    clearTimeout(edgeTimer);
+    countEl.classList.remove("edge");
     const n = state.matches.length;
     const hasQuery = state.query.length > 0;
     countEl.textContent = hasQuery ? `${n ? state.current + 1 : 0}/${n}${state.capped ? "+" : ""}` : "";
@@ -359,11 +380,23 @@
     return scrolled;
   }
 
+  // With wrapping off, Next at the end (or Previous at the start) stays put
+  // and the count says so for a moment.
+  function showEdge(dir) {
+    renderCount();
+    countEl.textContent = dir > 0 ? "End" : "Start";
+    countEl.classList.add("edge");
+    edgeTimer = setTimeout(renderCount, 900);
+  }
+
+  const EDGE = -2;
+
   function step(dir, byViewport) {
     const n = state.matches.length;
     if (!n) return;
     if (byViewport) {
       const target = findOffscreen(dir);
+      if (target === EDGE) return showEdge(dir);
       if (target !== -1) {
         select(target, dir > 0 ? "start" : "end");
         ping(state.matches[target], true);
@@ -371,7 +404,9 @@
       }
       // Everything fits on screen, so fall through to a single step.
     }
-    const target = (origin(dir) + dir + n) % n;
+    const next = origin(dir) + dir;
+    if (!state.wrap && (next < 0 || next >= n)) return showEdge(dir);
+    const target = (next + n) % n;
     ping(state.matches[target], select(target, "center"));
   }
 
@@ -420,7 +455,8 @@
 
   // Next viewport: the first match after the current one that is not fully
   // on screen below. Previous viewport: the same, upwards. After wrapping
-  // around the page end, any off-screen match qualifies.
+  // around the page end, any off-screen match qualifies. With wrapping off,
+  // such a match means the page end was reached, so it returns EDGE.
   function findOffscreen(dir) {
     const n = state.matches.length;
     const h = innerHeight;
@@ -433,7 +469,9 @@
       if (isEmpty(rect)) continue;
       const below = rect.bottom > h;
       const above = rect.top < 0;
-      if (dir > 0 ? below || (wrapped && above) : above || (wrapped && below)) return i;
+      if (dir > 0 ? below || (wrapped && above) : above || (wrapped && below)) {
+        return wrapped && !state.wrap ? EDGE : i;
+      }
     }
     return -1;
   }
@@ -656,17 +694,14 @@
 
   renderSettings();
   open();
-  chrome.storage?.local.get(["caseSensitive", "skipViewport", "followScroll", "animate"]).then((saved) => {
+  chrome.storage?.local.get(["caseSensitive", "skipViewport", "followScroll", "animate", "wrap"]).then((saved) => {
     const caseChanged = saved.caseSensitive !== undefined && saved.caseSensitive !== state.caseSensitive;
     if (saved.caseSensitive !== undefined) state.caseSensitive = saved.caseSensitive;
     if (saved.skipViewport !== undefined) state.skipViewport = saved.skipViewport;
     if (saved.followScroll !== undefined) state.followScroll = saved.followScroll;
     if (saved.animate !== undefined) state.animate = saved.animate;
+    if (saved.wrap !== undefined) state.wrap = saved.wrap;
     renderSettings();
     if (caseChanged && state.query) runSearch({ fromViewport: true });
-  });
-  // The options page can change this while the bar is open.
-  chrome.storage?.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.animate) state.animate = changes.animate.newValue !== false;
   });
 })();

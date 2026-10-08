@@ -22,13 +22,17 @@ The browser's own find stays reachable from the menu. Pages that refuse injectio
 | `Ctrl+Enter` / `Ctrl+Shift+Enter` | Next / previous in the other mode, once |
 | `Esc` | Close and leave the current match selected |
 
-The bar has three toggles, and all of them persist:
+The bar has five toggles, and all of them persist:
 
 - `Aa` turns on match case.
 - The screen-with-arrow button turns on skip viewport.
 - The crosshair button turns on follow scroll, which is on by default. If you scroll so the current match leaves the screen, Next starts from the first match on or below the screen, and Previous from the last match on or above it. Turn it off to make Next always continue from the current match and scroll back to it, as Chrome's find does.
+- The two-arrow loop button turns on wrap around, which is on by default. Turn it off to make Next stop at the last match and Previous at the first.
+- The sparkle button turns on the match animation, which is on by default.
 
-When Next or Previous moves to a match, an orange ring closes in on it and fades. A move that stays on screen gets a thin ring over 0.45 s. A move that scrolls the page, including a skip viewport jump, gets a thicker ring that starts wider, glows, and lasts 0.8 s. Typing shows the large ring only when the new result scrolls the page. No ring shows when the system asks for reduced motion. To turn it off yourself, right-click the toolbar icon, choose Options, and clear "Animate the current match". The change applies to open find bars too.
+When Next or Previous moves to a match, an orange ring closes in on it and fades. A move that stays on screen gets a thin ring over 0.45 s. A move that scrolls the page, including a skip viewport jump, gets a thicker ring that starts wider, glows, and lasts 0.8 s. Typing shows the large ring only when the new result scrolls the page. No ring shows when the system asks for reduced motion.
+
+With wrap around off, Next at the last match stays where it is and the count shows "End" for a moment. Previous at the first match shows "Start". In skip viewport mode, Next stops once the last screen of matches is showing.
 
 ## Scrollbar markers
 
